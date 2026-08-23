@@ -1,0 +1,56 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgcrypto]
+}
+
+model Institution {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  credentials Credential[]
+
+  @@map("institutions")
+}
+
+// Each row is one block in the hash chain. chainIndex is the block's
+// position; prevHash must equal the previous block's blockHash (or the
+// genesis hash for index 0). Tampering with any stored field is caught
+// by recomputing dataHash/blockHash and comparing against these columns.
+model Credential {
+  credentialId    String    @id @map("credential_id") @db.Uuid
+  chainIndex      Int       @unique @map("chain_index")
+  studentName     String    @map("student_name")
+  studentRollNo   String    @map("student_roll_no")
+  courseName      String    @map("course_name")
+  cgpa            String
+  issueDate       String    @map("issue_date")
+  institutionId   String    @map("institution_id") @db.Uuid
+  institutionName String    @map("institution_name")
+  status          String    @default("active")
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz
+  revokedReason   String?   @map("revoked_reason")
+  prevHash        String    @map("prev_hash")
+  dataHash        String    @map("data_hash")
+  blockHash       String    @map("block_hash")
+  blockTimestamp  DateTime  @map("block_timestamp") @db.Timestamptz
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  institution Institution @relation(fields: [institutionId], references: [id])
+
+  // A roll number identifies one student within one institution; the same
+  // institution can't issue a second credential under a roll number it has
+  // already registered. Different institutions may reuse the same roll no.
+  @@unique([institutionId, studentRollNo])
+  @@index([institutionId])
+  @@index([blockHash])
+  @@map("credentials")
+}
