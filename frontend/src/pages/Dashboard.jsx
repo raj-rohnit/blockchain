@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import api from '../api.js';
 import { useAuth } from '../AuthContext.jsx';
 import BulkUploadPanel from '../components/BulkUploadPanel.jsx';
+import HashChainExplorer from '../components/HashChainExplorer.jsx';
 
 const emptyForm = { studentName: '', studentRollNo: '', courseName: '', cgpa: '', issueDate: '' };
 
@@ -213,6 +214,8 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      {!loading && <HashChainExplorer credentials={credentials} />}
 
       <QrModal qr={issuedQr} onClose={() => setIssuedQr(null)} />
     </div>
