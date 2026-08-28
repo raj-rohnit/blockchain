@@ -3,11 +3,26 @@ import { useParams } from 'react-router-dom';
 import jsQR from 'jsqr';
 import api from '../api.js';
 import DigitalCertificate from '../components/DigitalCertificate.jsx';
+import BlockchainBackground from '../components/BlockchainBackground.jsx';
 
 function extractCredentialId(scannedText) {
   const trimmed = scannedText.trim();
   const parts = trimmed.split('/').filter(Boolean);
   return parts[parts.length - 1] || trimmed;
+}
+
+function ShieldIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M12 2 4 5v6c0 5 3.4 8.7 8 11 4.6-2.3 8-6 8-11V5l-8-3Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path d="m8.5 12 2.4 2.4L15.5 9.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 function StatusBanner({ result }) {
@@ -75,19 +90,13 @@ export default function Verify() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');
 
-  // Loading & Animation states
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
 
-  // Tamper Lab states
   const [tamperFields, setTamperFields] = useState(null);
   const [tamperResult, setTamperResult] = useState(null);
-  const [tamperLoading, setTamperLoading] = useState(false);
-  const [tamperStep, setTamperStep] = useState(0);
-  
   const fileInputRef = useRef(null);
 
-  // Progressive loading animation logic for main verification
   useEffect(() => {
     let timers = [];
     if (loading) {
@@ -163,58 +172,43 @@ export default function Verify() {
 
   async function handleTamperCheck() {
     if (!result) return;
-    
-    setTamperLoading(true);
-    setTamperStep(1);
-    setTamperResult(null);
-    setError('');
-
-    // Start UI visualization sequence
-    const uiInterval = setInterval(() => {
-      setTamperStep((s) => (s < 4 ? s + 1 : s));
-    }, 400);
-
     try {
-      // Execute the actual existing API check
       const res = await api.tamperCheck(result.credential.credentialId, tamperFields);
-      
-      // Fast-forward sequence if API returns quickly
-      clearInterval(uiInterval);
-      setTamperStep(4);
-      
-      // Slight delay to let step 4 render visually before showing final state
-      setTimeout(() => {
-        setTamperResult(res);
-        setTamperLoading(false);
-      }, 300);
+      setTamperResult(res);
     } catch (err) {
-      clearInterval(uiInterval);
-      setTamperLoading(false);
       setError(err.message);
     }
   }
 
-  function handleResetTamper() {
-    if (result) {
-      setTamperFields((f) => ({ ...f, cgpa: result.credential.cgpa }));
-      setTamperResult(null);
-      setTamperStep(0);
-      setError('');
-    }
-  }
-
   const isVerifiedSuccess = result && result.status !== 'revoked' && result.chainIntact;
-  const isDataModified = result && tamperFields && String(tamperFields.cgpa) !== String(result.credential.cgpa);
+
+  // Decorative flow strip only — derived from real loading/result state, nothing fabricated.
+  const flowStage = loading ? loadingStep : result ? 4 : 0;
+  const flowFailed = !loading && !!result && !isVerifiedSuccess;
 
   return (
     <div className="verify-page">
-      <div className="verify-console card no-print">
-        <div className="verify-console-header">
+      <BlockchainBackground variant="verify" />
+
+      <div className="verify-console verify-console-v2 card no-print">
+        <div className="console-glow-border" aria-hidden="true" />
+
+        <div className="console-header">
+          <div className="console-header-top">
+            <span className="console-eyebrow">
+              <ShieldIcon /> CRYPTOGRAPHIC VERIFICATION NODE
+            </span>
+            <span className="console-status">
+              <span className="console-status-dot" aria-hidden="true" /> LEDGER ONLINE
+            </span>
+          </div>
           <h1>VERIFY CREDENTIAL</h1>
-          <p className="subtitle">Verify the authenticity and integrity of an academic credential against the cryptographic ledger.</p>
+          <p className="subtitle">
+            Validate the authenticity and integrity of an academic credential against the cryptographic ledger.
+          </p>
         </div>
 
-        <div className="verify-tabs">
+        <div className="verify-tabs verify-tabs-v2">
           <button type="button" className={`verify-tab ${mode === 'id' ? 'active' : ''}`} onClick={() => setMode('id')}>
             Credential ID
           </button>
@@ -222,24 +216,54 @@ export default function Verify() {
             Block Hash
           </button>
         </div>
+        <p className="verify-mode-hint">
+          {mode === 'id'
+            ? 'Locate a credential directly using its unique identifier.'
+            : 'Verify a credential block using its SHA-256 hash.'}
+        </p>
 
         <form onSubmit={handleSearch}>
-          <div className="verify-search">
+          <div className="verify-search verify-search-v2">
+            <span className="verify-search-icon" aria-hidden="true">🔒</span>
             <input
+              className="verify-search-input mono"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={mode === 'id' ? 'e.g. 27f78520-6b5c-469c-923f-bedb2edbf5bb' : 'e.g. 8f52cda5b02ec52067b4e9baa8cc3c26…'}
               disabled={loading}
             />
-            <button className="btn btn-primary" type="submit" disabled={loading}>
-              {loading ? 'Verifying...' : 'Verify'}
+            <button className="btn btn-primary verify-btn" type="submit" disabled={loading}>
+              {loading ? (
+                <>
+                  <span className="btn-scan" aria-hidden="true" /> VERIFYING...
+                </>
+              ) : (
+                'VERIFY CREDENTIAL'
+              )}
             </button>
           </div>
         </form>
 
-        <div className="qr-scan-secondary" onClick={() => !loading && fileInputRef.current?.click()}>
-          <span className="qr-icon">📷</span> Scan or upload certificate QR
+        <div className="qr-scan-zone" onClick={() => !loading && fileInputRef.current?.click()}>
+          <span className="qr-scan-line" aria-hidden="true" />
+          <span className="qr-scan-icon" aria-hidden="true">▦</span>
+          <span className="qr-scan-title">SCAN CERTIFICATE QR</span>
+          <span className="qr-scan-sub">Upload a certificate QR image to verify its cryptographic record.</span>
           <input ref={fileInputRef} type="file" accept="image/*" onChange={handleQrFile} style={{ display: 'none' }} />
+        </div>
+
+        <div className="chain-flow-mini" aria-hidden="true">
+          <span className="chain-flow-step active">INPUT</span>
+          <span className="chain-flow-arrow">→</span>
+          <span className={`chain-flow-step ${flowStage >= 2 ? 'active' : ''}`}>HASH</span>
+          <span className="chain-flow-arrow">→</span>
+          <span className={`chain-flow-step ${flowStage >= 3 ? 'active' : ''}`}>LEDGER</span>
+          <span className="chain-flow-arrow">→</span>
+          <span
+            className={`chain-flow-step ${flowStage >= 4 ? (flowFailed ? 'failed' : 'active verified') : ''}`}
+          >
+            VERIFIED
+          </span>
         </div>
       </div>
 
@@ -297,157 +321,40 @@ export default function Verify() {
             </div>
           )}
 
-          {/* TAMPER DETECTION LAB */}
-          <div className="tamper-lab card no-print">
-            <div className="tamper-lab-header">
-              <h2>TAMPER DETECTION LAB</h2>
-              <p className="tamper-subtitle">
-                Modify a credential field below and see how cryptographic integrity responds in real-time.
+          <div className="tamper-demo-panel card no-print">
+            <div className="tamper-header">
+              <h3>TAMPER DETECTION DEMO</h3>
+              <p>
+                Modify a credential field below to see how changing the data affects its cryptographic
+                integrity — the same hash-chain math that verified the certificate above.
               </p>
             </div>
 
-            <div className="tamper-lab-content">
-              {/* EDIT SECTION */}
-              <div className="tamper-edit-section">
-                <div className="tamper-field-row">
-                  <div className="tamper-field-box original-box">
-                    <span className="tamper-label">ORIGINAL VALUE</span>
-                    <span className="tamper-static-val">CGPA: {result.credential.cgpa}</span>
-                  </div>
-                  
-                  <div className="tamper-field-box current-box">
-                    <span className="tamper-label">CURRENT VALUE</span>
-                    <div className="tamper-input-wrap">
-                      <span className="tamper-prefix">CGPA: </span>
-                      <input
-                        className={`tamper-input ${isDataModified ? 'is-modified' : ''}`}
-                        value={tamperFields?.cgpa ?? ''}
-                        onChange={(e) => setTamperFields((f) => ({ ...f, cgpa: e.target.value }))}
-                        disabled={tamperLoading}
-                        aria-label="Edit CGPA"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {isDataModified && !tamperResult && !tamperLoading && (
-                  <div className="tamper-before-after">
-                    <div className="ba-col">
-                      <span className="ba-label">BEFORE</span>
-                      <span className="ba-value">{result.credential.cgpa}</span>
-                    </div>
-                    <div className="ba-divider">➔</div>
-                    <div className="ba-col">
-                      <span className="ba-label">AFTER</span>
-                      <span className="ba-value">{tamperFields?.cgpa}</span>
-                    </div>
-                    <div className="ba-warning-badge">
-                      <span className="icon">⚠</span> DATA MODIFIED
-                    </div>
-                  </div>
-                )}
-
-                <div className="tamper-actions">
-                  <button 
-                    className="btn btn-primary btn-tamper-check" 
-                    onClick={handleTamperCheck} 
-                    disabled={tamperLoading}
-                  >
-                    {tamperLoading ? 'CHECKING...' : 'CHECK CRYPTOGRAPHIC INTEGRITY'}
-                  </button>
-                  
-                  {isDataModified && (
-                    <button 
-                      className="btn btn-ghost btn-tamper-reset" 
-                      onClick={handleResetTamper} 
-                      disabled={tamperLoading}
-                    >
-                      RESET VALUE
+            <div className="tamper-interactive">
+              <div className="tamper-row">
+                <div className="field">
+                  <label>Original value: CGPA {result.credential.cgpa}</label>
+                  <div className="input-group">
+                    <input
+                      value={tamperFields?.cgpa ?? ''}
+                      onChange={(e) => setTamperFields((f) => ({ ...f, cgpa: e.target.value }))}
+                      className="tamper-input"
+                    />
+                    <button className="btn btn-ghost" type="button" onClick={handleTamperCheck}>
+                      Check Integrity
                     </button>
-                  )}
+                  </div>
                 </div>
               </div>
 
-              {/* VERIFICATION ANIMATION */}
-              {tamperLoading && (
-                <div className="tamper-loading-sequence">
-                  <div className={`seq-step ${tamperStep >= 1 ? 'active' : ''}`}>
-                    <span className="seq-icon">{tamperStep >= 1 ? '✓' : '○'}</span> STEP 1: Reading credential data
-                  </div>
-                  <div className={`seq-step ${tamperStep >= 2 ? 'active' : ''}`}>
-                    <span className="seq-icon">{tamperStep >= 2 ? '✓' : (tamperStep===1?'◉':'○')}</span> STEP 2: Calculating cryptographic hash
-                  </div>
-                  <div className={`seq-step ${tamperStep >= 3 ? 'active' : ''}`}>
-                    <span className="seq-icon">{tamperStep >= 3 ? '✓' : (tamperStep===2?'◉':'○')}</span> STEP 3: Comparing with issued hash
-                  </div>
-                  <div className={`seq-step ${tamperStep >= 4 ? 'active' : ''}`}>
-                    <span className="seq-icon">{tamperStep >= 4 ? '✓' : (tamperStep===3?'◉':'○')}</span> STEP 4: Checking chain integrity
-                  </div>
-                </div>
-              )}
-
-              {/* RESULT PRESENTATION */}
-              {tamperResult && !tamperLoading && (
-                <div className={`tamper-result-presentation ${tamperResult.matches ? 'valid-state' : 'tampered-state'}`}>
-                  
-                  <div className="tamper-status-banner">
-                    {tamperResult.matches ? (
-                      <>
-                        <h3>✓ INTEGRITY VERIFIED</h3>
-                        <p>Credential data matches the issued cryptographic record.</p>
-                      </>
-                    ) : (
-                      <>
-                        <h3>✕ TAMPER DETECTED</h3>
-                        <p>The modified credential data no longer matches the issued cryptographic record.</p>
-                      </>
-                    )}
-                  </div>
-
-                  {/* Hash Comparison (Only shown if API provides hashes) */}
-                  {(tamperResult.originalHash || tamperResult.computedHash) && (
-                    <div className="tamper-hash-comparison">
-                      {tamperResult.originalHash && (
-                        <div className="hash-row">
-                          <span className="hash-label">ORIGINAL HASH</span>
-                          <span className="hash-value mono">{tamperResult.originalHash}</span>
-                        </div>
-                      )}
-                      {tamperResult.computedHash && (
-                        <div className="hash-row">
-                          <span className="hash-label">CURRENT HASH</span>
-                          <span className="hash-value mono">{tamperResult.computedHash}</span>
-                        </div>
-                      )}
-                      <div className={`hash-match-indicator ${tamperResult.matches ? 'match' : 'mismatch'}`}>
-                        {tamperResult.matches ? '✓ MATCH' : '✕ MISMATCH'}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* VISUAL FLOW DIAGRAM */}
-                  <div className="tamper-flow-diagram">
-                    <div className="flow-node">CREDENTIAL DATA</div>
-                    <div className={`flow-connector ${tamperResult.matches ? 'pulse' : 'break-first'}`}>
-                      {tamperResult.matches ? '↓' : '↓'}
-                    </div>
-                    <div className="flow-node">DATA HASH</div>
-                    <div className={`flow-connector ${tamperResult.matches ? 'pulse' : 'break-core'}`}>
-                      {tamperResult.matches ? '↓' : '✕ HASH MISMATCH'}
-                    </div>
-                    <div className="flow-node">BLOCK HASH</div>
-                    <div className={`flow-connector ${tamperResult.matches ? 'pulse' : 'break-cascade'}`}>
-                      {tamperResult.matches ? '↓' : '✕'}
-                    </div>
-                    <div className="flow-node">CHAIN LINK</div>
-                    <div className={`flow-connector ${tamperResult.matches ? 'pulse' : 'break-cascade'}`}>
-                      {tamperResult.matches ? '↓' : '✕'}
-                    </div>
-                    <div className={`flow-node final-node ${tamperResult.matches ? 'valid' : 'invalid'}`}>
-                      {tamperResult.matches ? '✓ CHAIN VALID' : '✕ CHAIN INTEGRITY FAILURE'}
-                    </div>
-                  </div>
-                  
+              {tamperResult && (
+                <div className={`tamper-status ${tamperResult.matches ? 'status-match' : 'status-mismatch'}`}>
+                  <h4>{tamperResult.matches ? '✓ HASH MATCH' : '✕ HASH MISMATCH'}</h4>
+                  <p>
+                    {tamperResult.matches
+                      ? 'This data matches the originally issued credential.'
+                      : 'This change breaks the cryptographic integrity of the credential.'}
+                  </p>
                 </div>
               )}
             </div>
