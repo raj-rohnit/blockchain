@@ -1,16 +1,15 @@
 services:
   - type: web
     name: credential-chain-backend
-    runtime: docker
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npm run build && npx prisma generate
+    startCommand: npx prisma migrate deploy && node dist/main
     plan: free
     envVars:
-      - key: PORT
-        value: 4000
       - key: JWT_SECRET
         generateValue: true
       - key: PUBLIC_VERIFY_BASE_URL
         value: https://your-vercel-app.vercel.app/verify   # update after Vercel deploy
       - key: DATABASE_URL
-        sync: false   # set manually in Render dashboard — paste your Supabase connection string
+        sync: false   # set manually in Render dashboard
